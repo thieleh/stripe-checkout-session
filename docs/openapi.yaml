@@ -1,24 +1,20 @@
 openapi: 3.0.3
 info:
-  title: Teachable Checkout API
-  version: 1.0.0
-  description: API for creating and tracking Stripe Checkout Sessions. Hosted mode is used by default. Embedded mode is also supported for testing.
+  title: Teachable Stripe Checkout API
+  version: 1.1.0
+  description: API for creating, updating, retrieving Checkout Sessions, and fetching Stripe data.
 
 servers:
   - url: https://staging.teachable.com/api
-    description: Staging environment using Stripe Staging API Keys.
+    description: Staging (Stripe Staging API Keys)
 
 paths:
   /checkout/session:
     post:
       summary: Create a Checkout Session
-      description: >
-        Creates a Stripe Checkout Session.
-
-        Hosted mode (default) requires success_url and cancel_url.
-
-        Embedded mode (ui_mode=embedded) does not allow success_url or cancel_url.
-        For embedded sessions, redirect_on_completion is set to "never".
+      description: |
+        Creates a Stripe Checkout Session (Hosted by default).  
+        You can also specify `ui_mode=embedded` for embedded testing.
       requestBody:
         required: true
         content:
@@ -26,45 +22,37 @@ paths:
             schema:
               type: object
               properties:
-                amount:
-                  type: integer
-                  description: Amount in cents. Defaults to 1000 ($10).
-                  example: 1000
-                currency:
-                  type: string
-                  description: ISO currency code. Defaults to "usd".
-                  example: usd
-                product_name:
-                  type: string
-                  description: Name of the product. Defaults to "Test Product".
-                  example: Test Product
+                line_items:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      price:
+                        type: string
+                        example: price_123
+                      quantity:
+                        type: integer
+                        example: 1
                 success_url:
                   type: string
-                  description: Required for hosted mode only. URL for redirect after payment success.
-                  example: https://example.org/success
+                  example: https://example.com/success
                 cancel_url:
                   type: string
-                  description: Required for hosted mode only. URL for redirect if payment is cancelled.
-                  example: https://example.org/cancel
+                  example: https://example.com/cancel
                 mode:
                   type: string
                   enum: [payment, subscription]
                   default: payment
-                  description: Payment or subscription mode.
                 customer_email:
                   type: string
-                  description: Optional email for pre-filling checkout. Must be valid if provided.
                   example: test@example.com
                 ui_mode:
                   type: string
                   enum: [hosted, embedded]
                   default: hosted
-                  description: >
-                    Controls the Checkout UI mode. "hosted" uses Stripe-hosted pages.
-                    "embedded" uses embedded checkout with no redirects.
       responses:
         '201':
-          description: Checkout Session created.
+          description: Checkout Session created
           content:
             application/json:
               schema:
@@ -80,9 +68,7 @@ paths:
   /checkout/session/{session_id}:
     get:
       summary: Retrieve a Checkout Session
-      description: >
-        Fetches details and status of a Checkout Session.
-        Possible statuses are "open", "complete", and "expired".
+      description: Get a session’s details and current status.
       parameters:
         - name: session_id
           in: path
@@ -92,7 +78,7 @@ paths:
             example: cs_test_12345
       responses:
         '200':
-          description: Session details.
+          description: Session details
           content:
             application/json:
               schema:
@@ -105,15 +91,106 @@ paths:
                     enum: [open, complete, expired]
                   amount:
                     type: integer
+    patch:
+      summary: Update a Checkout Session
+      description: Update session with a new price, transfer data, or shipping address.
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                new_price:
+                  type: string
+                  example: price_456
+                shipping_address:
+                  type: object
+                  properties:
+                    line1:
+                      type: string
+                      example: 123 Main St
+                    city:
+                      type: string
+                      example: New York
+                    postal_code:
+                      type: string
+                      example: 10001
+                    country:
+                      type: string
+                      example: US
+                transfer_data:
+                  type: object
+                  properties:
+                    destination:
+                      type: string
+                      example: acct_1A2B3C
+                    amount:
+                      type: integer
+                      example: 500
+      responses:
+        '200':
+          description: Session updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  updated:
+                    type: boolean
+
+  /payment_intents/{payment_intent_id}:
+    get:
+      summary: Fetch a Payment Intent
+      description: Retrieve details for a specific Payment Intent.
+      parameters:
+        - name: payment_intent_id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: pi_12345
+      responses:
+        '200':
+          description: PaymentIntent details
+
+  /charges/{charge_id}:
+    get:
+      summary: Fetch a Charge
+      description: Retrieve details for a specific Charge.
+      parameters:
+        - name: charge_id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: ch_12345
+      responses:
+        '200':
+          description: Charge details
+
+  /account:
+    get:
+      summary: Fetch Stripe Account
+      description: Get details about the current Stripe account.
+      responses:
+        '200':
+          description: Account details
 
   /webhook/stripe:
     post:
       summary: Stripe Webhook Endpoint
-      description: >
-        Receives Stripe events such as checkout.session.completed.
-
-        In development, signature verification is skipped.
-        In staging and production, the signature is verified using STRIPE_WEBHOOK_SECRET.
+      description: |
+        Receives events from Stripe (e.g., `checkout.session.completed`)  
+        and validates the signature using `STRIPE_WEBHOOK_SECRET`.
       requestBody:
         required: true
         content:
@@ -123,4 +200,4 @@ paths:
               additionalProperties: true
       responses:
         '200':
-          description: Webhook processed successfully.
+          description: Webhook processed
