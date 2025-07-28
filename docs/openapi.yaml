@@ -1,20 +1,22 @@
 openapi: 3.0.3
 info:
-  title: Teachable Stripe Checkout API
+  title: Teachable Checkout API
   version: 1.1.0
-  description: API for creating, updating, retrieving Checkout Sessions, and fetching Stripe data.
+  description: API for creating, updating, and tracking Stripe Checkout Sessions (Hosted mode by default). Supports fetching Payment Intents, Charges, and Account data.
 
 servers:
   - url: https://staging.teachable.com/api
-    description: Staging (Stripe Staging API Keys)
+    description: Staging (uses Stripe Staging API Keys)
 
 paths:
   /checkout/session:
     post:
       summary: Create a Checkout Session
       description: |
-        Creates a Stripe Checkout Session (Hosted by default).  
-        You can also specify `ui_mode=embedded` for embedded testing.
+        Creates a Stripe Checkout Session.
+        - Defaults to **Hosted Checkout** (`ui_mode=hosted`).
+        - Supports **Embedded Checkout** (`ui_mode=embedded`) if specified.
+        - If `line_items` is omitted, uses a default `price_id` (configured in code).
       requestBody:
         required: true
         content:
@@ -22,37 +24,31 @@ paths:
             schema:
               type: object
               properties:
-                line_items:
-                  type: array
-                  items:
-                    type: object
-                    properties:
-                      price:
-                        type: string
-                        example: price_123
-                      quantity:
-                        type: integer
-                        example: 1
                 success_url:
                   type: string
+                  description: URL to redirect after successful payment (Hosted only).
                   example: https://example.com/success
                 cancel_url:
                   type: string
+                  description: URL to redirect if the payment is canceled (Hosted only).
                   example: https://example.com/cancel
                 mode:
                   type: string
                   enum: [payment, subscription]
                   default: payment
+                  description: Type of checkout session.
                 customer_email:
                   type: string
+                  description: Optional email to pre-fill at checkout.
                   example: test@example.com
                 ui_mode:
                   type: string
                   enum: [hosted, embedded]
                   default: hosted
+                  description: UI mode for checkout.
       responses:
         '201':
-          description: Checkout Session created
+          description: Checkout Session created.
           content:
             application/json:
               schema:
@@ -65,12 +61,12 @@ paths:
                     type: string
                     example: https://checkout.stripe.com/pay/cs_test_12345
 
-  /checkout/session/{session_id}:
+  /checkout/session/{id}:
     get:
       summary: Retrieve a Checkout Session
-      description: Get a session’s details and current status.
+      description: Fetch session details including status and amount.
       parameters:
-        - name: session_id
+        - name: id
           in: path
           required: true
           schema:
@@ -78,7 +74,7 @@ paths:
             example: cs_test_12345
       responses:
         '200':
-          description: Session details
+          description: Checkout Session details.
           content:
             application/json:
               schema:
@@ -93,13 +89,17 @@ paths:
                     type: integer
     patch:
       summary: Update a Checkout Session
-      description: Update session with a new price, transfer data, or shipping address.
+      description: |
+        Updates a Checkout Session (limited support in Stripe):
+        - Can only update metadata, shipping options, or transfer data.
+        - **Cannot update prices or line items** (must create a new session for that).
       parameters:
-        - name: session_id
+        - name: id
           in: path
           required: true
           schema:
             type: string
+            example: cs_test_12345
       requestBody:
         required: true
         content:
@@ -107,36 +107,29 @@ paths:
             schema:
               type: object
               properties:
-                new_price:
-                  type: string
-                  example: price_456
                 shipping_address:
                   type: object
                   properties:
                     line1:
                       type: string
-                      example: 123 Main St
                     city:
                       type: string
-                      example: New York
-                    postal_code:
-                      type: string
-                      example: 10001
                     country:
                       type: string
-                      example: US
+                    postal_code:
+                      type: string
                 transfer_data:
                   type: object
                   properties:
                     destination:
                       type: string
-                      example: acct_1A2B3C
+                      description: Connected account ID.
                     amount:
                       type: integer
-                      example: 500
+                      description: Amount to transfer.
       responses:
         '200':
-          description: Session updated
+          description: Checkout Session updated.
           content:
             application/json:
               schema:
@@ -147,12 +140,12 @@ paths:
                   updated:
                     type: boolean
 
-  /payment_intents/{payment_intent_id}:
+  /payment_intents/{id}:
     get:
-      summary: Fetch a Payment Intent
-      description: Retrieve details for a specific Payment Intent.
+      summary: Retrieve a PaymentIntent
+      description: Fetches details for a specific PaymentIntent.
       parameters:
-        - name: payment_intent_id
+        - name: id
           in: path
           required: true
           schema:
@@ -160,14 +153,18 @@ paths:
             example: pi_12345
       responses:
         '200':
-          description: PaymentIntent details
+          description: PaymentIntent details.
+          content:
+            application/json:
+              schema:
+                type: object
 
-  /charges/{charge_id}:
+  /charges/{id}:
     get:
-      summary: Fetch a Charge
-      description: Retrieve details for a specific Charge.
+      summary: Retrieve a Charge
+      description: Fetches details for a specific charge.
       parameters:
-        - name: charge_id
+        - name: id
           in: path
           required: true
           schema:
@@ -175,22 +172,33 @@ paths:
             example: ch_12345
       responses:
         '200':
-          description: Charge details
+          description: Charge details.
+          content:
+            application/json:
+              schema:
+                type: object
 
   /account:
     get:
-      summary: Fetch Stripe Account
-      description: Get details about the current Stripe account.
+      summary: Retrieve Stripe Account
+      description: Fetches information about the connected Stripe account.
       responses:
         '200':
-          description: Account details
+          description: Account details.
+          content:
+            application/json:
+              schema:
+                type: object
 
   /webhook/stripe:
     post:
       summary: Stripe Webhook Endpoint
       description: |
-        Receives events from Stripe (e.g., `checkout.session.completed`)  
-        and validates the signature using `STRIPE_WEBHOOK_SECRET`.
+        Receives events from Stripe such as:
+        - `checkout.session.completed`
+        - `payment_intent.succeeded`
+        - `charge.succeeded`
+        Validates signatures in staging/production.
       requestBody:
         required: true
         content:
@@ -200,4 +208,4 @@ paths:
               additionalProperties: true
       responses:
         '200':
-          description: Webhook processed
+          description: Webhook processed successfully.

@@ -65,28 +65,55 @@ func CreateCheckoutSession(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
+
+	// Default to a $10 product if no line items are provided
 	if len(req.LineItems) == 0 {
-		// Using a default Price ID so we avoid resource_missing
-		req.LineItems = []LineItem{{Price: "price_1RooOjFN9iVxHY4vNARpSFFc", Quantity: 1}}
+		log.Printf("[INFO] No line_items provided; defaulting to $10 test product.")
+		req.LineItems = []LineItem{{Price: "", Quantity: 1}}
 	}
+
+	// Default values for missing fields
 	if req.UIMode == "" {
 		req.UIMode = "hosted"
 	}
+	if req.Mode == "" {
+		req.Mode = "payment" // Stripe requires a valid mode
+	}
 
 	params := &stripe.CheckoutSessionParams{
-		Mode:       stripe.String(req.Mode),
-		UIMode:     stripe.String(req.UIMode),
-		SuccessURL: stripe.String(req.SuccessURL),
-		CancelURL:  stripe.String(req.CancelURL),
+		Mode:   stripe.String(req.Mode),
+		UIMode: stripe.String(req.UIMode),
+	}
+
+	if req.SuccessURL != "" {
+		params.SuccessURL = stripe.String(req.SuccessURL)
+	}
+	if req.CancelURL != "" {
+		params.CancelURL = stripe.String(req.CancelURL)
 	}
 	if req.CustomerEmail != "" {
 		params.CustomerEmail = stripe.String(req.CustomerEmail)
 	}
+
+	// Add Line Items dynamically (price or default $10 price_data)
 	for _, li := range req.LineItems {
-		params.LineItems = append(params.LineItems, &stripe.CheckoutSessionLineItemParams{
-			Price:    stripe.String(li.Price),
-			Quantity: stripe.Int64(li.Quantity),
-		})
+		if li.Price != "" {
+			params.LineItems = append(params.LineItems, &stripe.CheckoutSessionLineItemParams{
+				Price:    stripe.String(li.Price),
+				Quantity: stripe.Int64(li.Quantity),
+			})
+		} else {
+			params.LineItems = append(params.LineItems, &stripe.CheckoutSessionLineItemParams{
+				PriceData: &stripe.CheckoutSessionLineItemPriceDataParams{
+					Currency: stripe.String(string(stripe.CurrencyUSD)),
+					ProductData: &stripe.CheckoutSessionLineItemPriceDataProductDataParams{
+						Name: stripe.String("Default Test Product"),
+					},
+					UnitAmount: stripe.Int64(1000), // $10 fallback
+				},
+				Quantity: stripe.Int64(li.Quantity),
+			})
+		}
 	}
 
 	log.Printf("[REQUEST] Creating Checkout Session (Mode: %s, UIMode: %s)", req.Mode, req.UIMode)
@@ -132,14 +159,8 @@ func UpdateCheckoutSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// NOTE: Stripe Checkout Sessions are limited in updates.
-	// Typically you'd cancel + recreate or update PaymentIntent.
+	// Only limited updates allowed by Stripe
 	params := &stripe.CheckoutSessionParams{}
-	if payload.NewPrice != "" {
-		params.LineItems = []*stripe.CheckoutSessionLineItemParams{
-			{Price: stripe.String(payload.NewPrice), Quantity: stripe.Int64(1)},
-		}
-	}
 	log.Printf("[INFO] Attempting update with price=%s transferData=%v shipping=%v", payload.NewPrice, payload.TransferData, payload.Shipping)
 
 	s, err := session.Update(id, params)

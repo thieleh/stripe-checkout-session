@@ -1,0 +1,310 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Teachable Checkout API",
+    "version": "1.1.0",
+    "description": "API for creating, updating, and tracking Stripe Checkout Sessions (Hosted mode by default). Supports fetching Payment Intents, Charges, and Account data."
+  },
+  "servers": [
+    {
+      "url": "https://staging.teachable.com/api",
+      "description": "Staging (uses Stripe Staging API Keys)"
+    }
+  ],
+  "paths": {
+    "/checkout/session": {
+      "post": {
+        "summary": "Create a Checkout Session",
+        "description": "Creates a Stripe Checkout Session.\n- Defaults to **Hosted Checkout** (`ui_mode=hosted`).\n- Supports **Embedded Checkout** (`ui_mode=embedded`) if specified.\n- If `line_items` is omitted, uses a default `price_id` (configured in code).\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success_url": {
+                    "type": "string",
+                    "description": "URL to redirect after successful payment (Hosted only).",
+                    "example": "https://example.com/success"
+                  },
+                  "cancel_url": {
+                    "type": "string",
+                    "description": "URL to redirect if the payment is canceled (Hosted only).",
+                    "example": "https://example.com/cancel"
+                  },
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "payment",
+                      "subscription"
+                    ],
+                    "default": "payment",
+                    "description": "Type of checkout session."
+                  },
+                  "customer_email": {
+                    "type": "string",
+                    "description": "Optional email to pre-fill at checkout.",
+                    "example": "test@example.com"
+                  },
+                  "ui_mode": {
+                    "type": "string",
+                    "enum": [
+                      "hosted",
+                      "embedded"
+                    ],
+                    "default": "hosted",
+                    "description": "UI mode for checkout."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Checkout Session created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "example": "cs_test_12345"
+                    },
+                    "url": {
+                      "type": "string",
+                      "example": "https://checkout.stripe.com/pay/cs_test_12345"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/checkout/session/{id}": {
+      "get": {
+        "summary": "Retrieve a Checkout Session",
+        "description": "Fetch session details including status and amount.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "cs_test_12345"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Checkout Session details.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "open",
+                        "complete",
+                        "expired"
+                      ]
+                    },
+                    "amount": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update a Checkout Session",
+        "description": "Updates a Checkout Session (limited support in Stripe):\n- Can only update metadata, shipping options, or transfer data.\n- **Cannot update prices or line items** (must create a new session for that).\n",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "cs_test_12345"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "shipping_address": {
+                    "type": "object",
+                    "properties": {
+                      "line1": {
+                        "type": "string"
+                      },
+                      "city": {
+                        "type": "string"
+                      },
+                      "country": {
+                        "type": "string"
+                      },
+                      "postal_code": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "transfer_data": {
+                    "type": "object",
+                    "properties": {
+                      "destination": {
+                        "type": "string",
+                        "description": "Connected account ID."
+                      },
+                      "amount": {
+                        "type": "integer",
+                        "description": "Amount to transfer."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Checkout Session updated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "updated": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/payment_intents/{id}": {
+      "get": {
+        "summary": "Retrieve a PaymentIntent",
+        "description": "Fetches details for a specific PaymentIntent.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "pi_12345"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "PaymentIntent details.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/charges/{id}": {
+      "get": {
+        "summary": "Retrieve a Charge",
+        "description": "Fetches details for a specific charge.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "ch_12345"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Charge details.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/account": {
+      "get": {
+        "summary": "Retrieve Stripe Account",
+        "description": "Fetches information about the connected Stripe account.",
+        "responses": {
+          "200": {
+            "description": "Account details.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhook/stripe": {
+      "post": {
+        "summary": "Stripe Webhook Endpoint",
+        "description": "Receives events from Stripe such as:\n- `checkout.session.completed`\n- `payment_intent.succeeded`\n- `charge.succeeded`\nValidates signatures in staging/production.\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook processed successfully."
+          }
+        }
+      }
+    }
+  },
+  "components": {}
+}
