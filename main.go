@@ -3,6 +3,11 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"log"
+	"net/http"
+	"os"
+
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 	"github.com/stripe/stripe-go/v81"
@@ -11,10 +16,6 @@ import (
 	"github.com/stripe/stripe-go/v81/checkout/session"
 	"github.com/stripe/stripe-go/v81/paymentintent"
 	"github.com/stripe/stripe-go/v81/webhook"
-	"io/ioutil"
-	"log"
-	"net/http"
-	"os"
 )
 
 func main() {
@@ -44,12 +45,13 @@ func main() {
 }
 
 type CreateSessionRequest struct {
-	LineItems     []LineItem `json:"line_items"`
-	SuccessURL    string     `json:"success_url"`
-	CancelURL     string     `json:"cancel_url"`
-	Mode          string     `json:"mode"`
-	CustomerEmail string     `json:"customer_email"`
-	UIMode        string     `json:"ui_mode"`
+	LineItems          []LineItem `json:"line_items"`
+	SuccessURL         string     `json:"success_url"`
+	CancelURL          string     `json:"cancel_url"`
+	Mode               string     `json:"mode"`
+	CustomerEmail      string     `json:"customer_email"`
+	UIMode             string     `json:"ui_mode"`
+	DestinationAccount string     `json:"destination_account"`
 }
 
 type LineItem struct {
@@ -93,6 +95,13 @@ func CreateCheckoutSession(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.CustomerEmail != "" {
 		params.CustomerEmail = stripe.String(req.CustomerEmail)
+	}
+	if req.DestinationAccount != "" {
+		params.PaymentIntentData = &stripe.CheckoutSessionPaymentIntentDataParams{
+			TransferData: &stripe.CheckoutSessionPaymentIntentDataTransferDataParams{
+				Destination: stripe.String(req.DestinationAccount),
+			},
+		}
 	}
 
 	// Add Line Items dynamically (price or default $10 price_data)
